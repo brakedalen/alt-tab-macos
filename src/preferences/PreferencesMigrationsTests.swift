@@ -7,9 +7,8 @@ import XCTest
 /// the suite. Each test seeds the "old" keys in an isolated `UserDefaults` suite (injected via
 /// `PreferencesMigrations.defaults`), runs ONE migration, and asserts the resulting keys + removals.
 ///
-/// `migrateShortcutPreferencesToSecureCoding` and `migrateLoginItem` are intentionally NOT covered:
-/// the former needs the real NSKeyedArchiver/ShortcutRecorder codec (stubbed compile-only here), the
-/// latter mutates real Login Items via deprecated LaunchServices APIs.
+/// `migrateShortcutPreferencesToSecureCoding` needs the real NSKeyedArchiver/ShortcutRecorder codec
+/// (stubbed compile-only here), so it is not covered by this suite.
 ///
 /// Groups: A version gating · B grouping→per-shortcut · C language remap · D/E/F exceptions ·
 /// G/H show-windows dropdowns · I gestures · J cursor · K menubar · L/M sizes · N shortcuts · P dropdowns.

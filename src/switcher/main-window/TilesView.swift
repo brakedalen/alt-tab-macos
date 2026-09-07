@@ -141,13 +141,7 @@ class TilesView {
         searchField.sendsSearchStringImmediately = true
         searchField.sendsWholeSearchString = true
         searchField.bezelStyle = .roundedBezel
-        if #available(macOS 26.0, *) {
-            searchField.controlSize = .extraLarge
-        } else if #available(macOS 13.0, *) {
-            searchField.controlSize = .large
-        } else {
-            searchField.controlSize = .regular
-        }
+        searchField.controlSize = .extraLarge
         searchField.usesSingleLineMode = true
         searchField.target = Self.self
         searchField.action = #selector(Self.searchFieldChanged(_:))
@@ -765,7 +759,7 @@ class TilesDocumentView: FlippedView {
     override init(frame frameRect: NSRect) {
         super.init(frame: frameRect)
         // we only handle URLs (i.e. not text, image, or other draggable things)
-        registerForDraggedTypes([NSPasteboard.PasteboardType(kUTTypeURL as String)])
+        registerForDraggedTypes([.URL])
     }
 
     required init?(coder: NSCoder) {
@@ -795,9 +789,15 @@ class TilesDocumentView: FlippedView {
         let urls = (sender.draggingPasteboard.readObjects(forClasses: [NSURL.self]) as? [URL]) ?? []
         guard DragAndDropResolver.canDrop(hasTarget: target != nil, hasWindow: target?.window_ != nil, hasAppBundleURL: appUrl != nil, urlCount: urls.count),
               let appUrl else { return false }
-        let open = try? NSWorkspace.shared.open(urls, withApplicationAt: appUrl, options: [], configuration: [:])
-        if open != nil { App.hideUi() }
-        return open != nil
+        let session = SwitcherSession.current
+        NSWorkspace.shared.open(urls, withApplicationAt: appUrl, configuration: .init()) { [weak session] app, error in
+            DispatchQueue.main.async {
+                if let error { Logger.error { "Failed to open dropped URLs: \(error)" } }
+                // A delayed launch completion must not close a newer switcher invocation.
+                if app != nil, let session, SwitcherSession.current === session { App.hideUi() }
+            }
+        }
+        return true
     }
 
     override func concludeDragOperation(_ sender: NSDraggingInfo?) {

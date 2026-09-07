@@ -13,7 +13,8 @@ class SystemPermissions {
     // characterised in public sources, so we also keep a sparse 60s backstop timer below.
     // Infra requirements: NSDistributedNotificationCenter since 10.15 ignores nil-name
     // observers (we pass a name) and since macOS 15 silently fails for unsigned binaries
-    // (AltTab is Developer ID signed). macOS 13+ has a known bug where `AXIsProcessTrusted`
+    // (official AltTab is Developer ID signed; this build uses the configured local identity).
+    // macOS 13+ has a known bug where `AXIsProcessTrusted`
     // can return stale values right after a toggle; we call `AccessibilityPermission.update()`
     // which re-runs the API rather than caching.
     private static let axRevokeNotificationName = "com.apple.accessibility.api"
@@ -72,8 +73,9 @@ class SystemPermissions {
             DispatchQueue.main.async {
                 preStartupPermissionsPassed = true
                 PermissionsWindow.shared?.close()
-                setInfrequentTimer()
                 startListeningForDistributedRevoke()
+                // The backstop interval depends on this observer already being registered.
+                setInfrequentTimer()
                 App.continueAppLaunchAfterPermissionsAreGranted()
             }
         } else {
@@ -158,27 +160,9 @@ class ScreenRecordingPermission {
     // their return value is not updated during the app lifetime
     // note: shows the system prompt if there's no permission
     private static func isGrantedOnSomeDisplay() -> Bool {
-        if #available(macOS 12.3, *) {
-            return checkWithSCShareableContent()
-        } else {
-            let mainDisplayID = CGMainDisplayID()
-            if checkWithCGDisplayStream(mainDisplayID) {
-                return true
-            }
-            // maybe the main screen can't produce a CGDisplayStream, but another screen can
-            // a positive on any screen must mean that the permission is granted; we try on the other screens
-            for screen in NSScreen.screens {
-                if let id = screen.number(), id != mainDisplayID {
-                    if checkWithCGDisplayStream(id) {
-                        return true
-                    }
-                }
-            }
-            return false
-        }
+        return checkWithSCShareableContent()
     }
 
-    @available(macOS 12.3, *)
     private static func checkWithSCShareableContent() -> Bool {
         return runWithTimeout { completion in
             SCShareableContent.getExcludingDesktopWindows(true, onScreenWindowsOnly: false) { shareableContent, error in
@@ -190,22 +174,6 @@ class ScreenRecordingPermission {
                 }
                 completion(error != nil ? false : (shareableContent != nil))
             }
-        }
-    }
-
-    private static func checkWithCGDisplayStream(_ id: CGDirectDisplayID) -> Bool {
-        return runWithTimeout { completion in
-            // this initializer can actually block for a while
-            // it's undocumented but has been proven by spindumps shared by AltTab users
-            let displayStream = CGDisplayStream(
-                dispatchQueueDisplay: id,
-                outputWidth: 1,
-                outputHeight: 1,
-                pixelFormat: Int32(kCVPixelFormatType_32BGRA),
-                properties: nil,
-                queue: .global()
-            ) { _, _, _, _ in }
-            completion(displayStream != nil)
         }
     }
 

@@ -6,14 +6,15 @@ This document gives a technical overview of the project, for newcomers who want 
 
 ## Building the project
 
-This project has minimal dependency on Xcode-only features (e.g. InterfaceBuilder, Playgrounds). You can build it by doing:
+For this macOS 26+ development fork, follow [AltTab dev build and signing instructions](development-build.md). Open `alt-tab-macos.xcodeproj` and select **AltTab dev**, or run `ai/build.sh`. This builds the optimized Release product used by `ai/run.sh` and `ai/profile.sh`. The **Debug** scheme remains available for interactive debugging.
 
-* `scripts/codesign/setup_local.sh` to generate a local self-signed certificate, to avoid having to re-check the `System Preferences > Security & Privacy` permissions on every build
-* Either open `alt-tab-macos.xcodeproj` with Xcode, or use the CLI: `xcodebuild -project alt-tab-macos.xcodeproj -scheme Debug` to build the .app with the `Debug` build configuration
+Select your own persistent Apple Development certificate and team for both build configurations in Xcode, or in the ignored `config/local.xcconfig`. Keep the bundle identifier `no.brakedalen.AltTab-dev` and the same signing identity across rebuilds. The ad-hoc fallback permits compilation but does not guarantee retained Accessibility or screen-recording permissions. The upstream certificate-generation script is not required for this workflow and is not run automatically.
+
+See [the performance comparison procedure](performance-testing.md) before testing against the official installed app. The dependency versions and current SDK/compiler details are recorded in the [toolchain audit](development-build.md#compiler-sdk-deployment-target).
 
 ## Mac development
 
-Mac development ecosystem is pretty terrible in general. They keep piling on the tech stacks on top of each other, so you have C APIs, ObjC APIs, Swift APIs, Interface builder, Playgrounds, Swift UI, Mac Catalyst. All these are bridging with each other with a bunch of macros, SDKs glue, compiler flags, compatibility mode, XCode legacy build system, etc. For alt-tab, we are on Swift 5.0. Note that swift just recently started being stable, but overall any change of version breaks a lot of stuff. Swift itself is the mainstream language with the worst governance I’ve seen in modern times.
+Mac development ecosystem is pretty terrible in general. They keep piling on the tech stacks on top of each other, so you have C APIs, ObjC APIs, Swift APIs, Interface builder, Playgrounds, Swift UI, Mac Catalyst. All these are bridging with each other with a bunch of macros, SDKs glue, compiler flags, compatibility mode, XCode legacy build system, etc. This fork uses Swift 5 language mode with the current compiler; see the toolchain audit above. Note that swift just recently started being stable, but overall any change of version breaks a lot of stuff. Swift itself is the mainstream language with the worst governance I’ve seen in modern times.
 
 Regarding SDKs, it’s very different from other (better) ecosystems like Java. Here the SDK is bundled with XCode, and XCode is bundled with the OS. This means that from a machine running let’s say macOS 10.10, you have access to only a specific range of XCode versions (you can’t run the latest for instance), and these give you access to a specific range of SDKs (i.e. Swift + objc + c + bridges + compiler + toolchain + etc)
 

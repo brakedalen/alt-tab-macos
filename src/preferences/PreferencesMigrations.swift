@@ -42,8 +42,6 @@ class PreferencesMigrations {
             ("7.0.0", migratePreferencesIndexes),
             ("6.43.0", migrateExceptions),
             ("6.28.1", migrateMinMaxWindowsWidthInRow),
-            // "Start at login" new implem doesn't use Login Items; we remove the entry from previous versions
-            ("6.27.1", { (PreferencesMigrations.self as AvoidDeprecationWarnings.Type).migrateLoginItem() }),
             // "Show windows from:" got the "Active Space" option removed
             ("6.23.0", migrateShowWindowsFrom),
             // nextWindowShortcut used to be able to have modifiers already present in holdShortcut; we remove these
@@ -284,33 +282,6 @@ class PreferencesMigrations {
         }
     }
 
-    @available(OSX, deprecated: 10.11)
-    static func migrateLoginItem() {
-        do {
-            if let loginItemsWrapped = LSSharedFileListCreate(nil, kLSSharedFileListSessionLoginItems.takeRetainedValue(), nil) {
-                let loginItems = loginItemsWrapped.takeRetainedValue()
-                if let loginItemsSnapshotWrapped = LSSharedFileListCopySnapshot(loginItems, nil) {
-                    let loginItemsSnapshot = loginItemsSnapshotWrapped.takeRetainedValue() as! [LSSharedFileListItem]
-                    let itemName = Bundle.main.bundleURL.lastPathComponent as CFString
-                    let itemUrl = URL(fileURLWithPath: Bundle.main.bundlePath) as CFURL
-                    // resolve without mounting so a login item bookmark pointing to a dead SMB share
-                    // can't freeze the main thread mounting it synchronously (#5773)
-                    let flags = LSSharedFileListResolutionFlags(kLSSharedFileListNoUserInteraction | kLSSharedFileListDoNotMountVolumes)
-                    loginItemsSnapshot.forEach {
-                        if (LSSharedFileListItemCopyDisplayName($0).takeRetainedValue() == itemName) ||
-                               (LSSharedFileListItemCopyResolvedURL($0, flags, nil)?.takeRetainedValue() == itemUrl) {
-                            LSSharedFileListItemRemove(loginItems, $0)
-                        }
-                    }
-                }
-            }
-            throw AxError.runtimeError // remove compiler warning
-        } catch {
-            // the LSSharedFile API is deprecated, and has a runtime crash on M1 Monterey
-            // we catch any exception to void the app crashing
-        }
-    }
-
     static func migrateShowWindowsFrom() {
         ["", "2"].forEach { suffix in
             if let spacesToShow = Self.defaults.string(forKey: "spacesToShow" + suffix) {
@@ -419,10 +390,3 @@ class PreferencesMigrations {
         }
     }
 }
-
-/// workaround to silence compiler warning
-private protocol AvoidDeprecationWarnings {
-    static func migrateLoginItem()
-}
-
-extension PreferencesMigrations: AvoidDeprecationWarnings {}

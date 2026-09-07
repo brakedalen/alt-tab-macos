@@ -9,6 +9,7 @@ class App: AppCenterApplication {
     static let activity = ProcessInfo.processInfo.beginActivity(options: .userInitiatedAllowingIdleSystemSleep,
         reason: "Prevent App Nap to preserve responsiveness")
     static let bundleIdentifier = Bundle.main.bundleIdentifier!
+    static let isDevelopmentBuild = Bundle.main.object(forInfoDictionaryKey: "AltTabDevelopmentBuild") as? Bool ?? false
     static let bundleURL = Bundle.main.bundleURL
     static let name = Bundle.main.object(forInfoDictionaryKey: "CFBundleName") as! String
     static let version = Bundle.main.object(forInfoDictionaryKey: "CFBundleVersion") as! String
@@ -68,6 +69,7 @@ class App: AppCenterApplication {
         Logger.debug { "active:\(SwitcherSession.isActive)" }
         guard SwitcherSession.current != nil else { return } // already hidden
         SwitcherSession.current = nil
+        WindowCaptureScreenshots.cancelSessionRequests()
         KeyboardEvents.updateEscapeAbsorptionTap() // session closed: stop tapping keyDown (#5766)
         UsageStats.resetSession()
         TilesView.endSearchSession()
@@ -446,13 +448,16 @@ class App: AppCenterApplication {
         CursorEvents.observe()
         TrackpadEvents.observe()
         CliEvents.observe()
-        App.sparkleDelegate = SparkleDelegate()
-        App.updaterController = SPUStandardUpdaterController(
-            startingUpdater: false,
-            updaterDelegate: App.sparkleDelegate!,
-            userDriverDelegate: nil)
-        DispatchQueue.main.asyncAfter(deadline: .now() + 30) {
-            App.updaterController?.startUpdater()
+        // A development bundle must never install an update from the official appcast.
+        if !App.isDevelopmentBuild {
+            App.sparkleDelegate = SparkleDelegate()
+            App.updaterController = SPUStandardUpdaterController(
+                startingUpdater: false,
+                updaterDelegate: App.sparkleDelegate!,
+                userDriverDelegate: nil)
+            DispatchQueue.main.asyncAfter(deadline: .now() + 30) {
+                App.updaterController?.startUpdater()
+            }
         }
         PreferencesEvents.initialize()
         BenchmarkRunner.startIfNeeded()
@@ -476,7 +481,7 @@ class App: AppCenterApplication {
 
 extension App: NSApplicationDelegate {
     func applicationDidFinishLaunching(_ aNotification: Notification) {
-        App.appCenterDelegate = AppCenterCrash()
+        if !App.isDevelopmentBuild { App.appCenterDelegate = AppCenterCrash() }
         App.shared.disableRelaunchOnLogin()
         Logger.initialize()
         Logger.info { "Launching AltTab \(App.version)" }
@@ -502,7 +507,7 @@ extension App: NSApplicationDelegate {
         #if DEBUG
         UserDefaults.standard.set(true, forKey: "NSConstraintBasedLayoutVisualizeMutuallyExclusiveConstraints")
         #else
-        MoveToApplicationsFolder.promptIfNeeded()
+        if !App.isDevelopmentBuild { MoveToApplicationsFolder.promptIfNeeded() }
         #endif
         // The WindowServer event tap is CGS-only (needs no Accessibility, no Preferences, no model), so
         // install it before licensing / the permission gate. The skeleton is then available immediately and

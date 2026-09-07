@@ -2,6 +2,7 @@
 
 xcodebuild \
   -project alt-tab-macos.xcodeproj \
-  -scheme Debug \
-  -configuration Debug \
-  -derivedDataPath DerivedData
+  -scheme "AltTab dev" \
+  -configuration Release \
+  -derivedDataPath DerivedData \
+  -jobs 4

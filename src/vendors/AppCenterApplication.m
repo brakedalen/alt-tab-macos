@@ -5,7 +5,9 @@
 @implementation AppCenterApplication
 
 - (void)reportException:(NSException *)exception {
-    [MSACCrashes applicationDidReportException:exception];
+    if (![[NSBundle.mainBundle objectForInfoDictionaryKey:@"AltTabDevelopmentBuild"] boolValue]) {
+        [MSACCrashes applicationDidReportException:exception];
+    }
     [super reportException:exception];
 }
 

@@ -2,7 +2,7 @@
 # Build phase script for the alt-tab-macos target. Wired from the "Copy Sparkle Helpers"
 # build phase via $(SRCROOT)/scripts/copy_sparkle_helpers.sh.
 #
-# Runs after Xcode's Embed Frameworks phase, before Xcode's final code-signing of AltTab.app:
+# Runs after Xcode's Embed Frameworks phase, before Xcode's final code-signing of the host app:
 #   1. Copy Sparkle's prebuilt Updater.app + Autoupdate (already Developer ID-signed at
 #      vendor time by vendor/scripts/update_sparkle.sh) into Sparkle.framework/Versions/A/,
 #      AND add the top-level Sparkle.framework/Autoupdate and /Updater.app symlinks. Sparkle's
@@ -96,14 +96,15 @@ for plist in "$SPARKLE_VERSIONED/Resources/Info.plist" "$SPARKLE_PKG/Resources/I
     [ -f "$plist" ] && plutil -replace CFBundleIdentifier -string "org.sparkle-project.Sparkle" "$plist"
 done
 
-# Re-seal Sparkle.framework so its _CodeSignature/CodeResources reflects our CFBundleIdentifier
-# rewrite + the helper/resource copies above. We don't have to sign Updater.app / Autoupdate —
-# those are pre-signed with the maintainer's Developer ID at vendor time (see
-# vendor/scripts/update_sparkle.sh) and their seals deeper than --deep walks, so Xcode's final
-# pass on AltTab.app never touches them.
-# Why this can't be Xcode's --deep alone: Release adds --deep via release.xcconfig and Xcode does
-# re-seal Sparkle.framework, but Debug uses --timestamp=none without --deep, leaving the SPM
-# linker-signed adhoc seal in place — which then fails `codesign --verify --deep --strict`
-# because that seal references resources the framework no longer matches.
+# Development bundles use the configured local identity for the copied helpers too. The
+# committed helper seals fail strict arm64 verification; re-sign only build products, without
+# modifying vendored binaries or requiring the original maintainer's certificate.
 IDENT="${EXPANDED_CODE_SIGN_IDENTITY:-${CODE_SIGN_IDENTITY:--}}"
+if [[ "$(plutil -extract AltTabDevelopmentBuild raw -o - "$SRCROOT/Info.plist" 2>/dev/null)" == "true" ]]; then
+    codesign --force --sign "$IDENT" --options runtime --timestamp=none "$SPARKLE_VERSIONED/Updater.app"
+    codesign --force --sign "$IDENT" --options runtime --timestamp=none "$SPARKLE_VERSIONED/Autoupdate"
+fi
+
+# Seal inside out, before Xcode signs the host. The SPM linker's framework seal predates the
+# identifier/resource changes and cannot be retained after embedding the helpers.
 codesign --force --sign "$IDENT" "$SPARKLE_FW"

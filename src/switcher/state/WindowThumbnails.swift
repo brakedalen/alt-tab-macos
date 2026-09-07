@@ -30,9 +30,10 @@ enum WindowThumbnails {
     /// its thumbnail while it's still frontmost lets that tile show a real screenshot instead. No-op while the
     /// switcher is open (the normal refresh captures then); throttled per wid; obeys the screenshot guards below.
     static func captureFocusedInBackground(_ window: Window) {
-        guard !SwitcherSession.isActive, let wid = window.cgWindowId, wid != CGWindowID(bitPattern: -1) else { return }
-        focusedCaptureThrottler.throttleOrProceed(key: "\(wid)") {
-            refreshAsync([window], .refreshUiAfterExternalEvent, force: true)
+        guard Preferences.captureWindowsInBackground, !SwitcherSession.isActive, let wid = window.cgWindowId, wid != CGWindowID(bitPattern: -1) else { return }
+        focusedCaptureThrottler.throttleOrProceed(key: "\(wid)") { [weak window] in
+            guard !SwitcherSession.isActive, let window, Windows.byWindowId[wid] === window else { return }
+            refreshAsync([window], .refreshUiAfterExternalEvent)
         }
     }
 
@@ -82,11 +83,9 @@ enum WindowThumbnails {
         guard let wid = window.cgWindowId, !restoringWids.contains(wid) else { return }
         restoringWids.insert(wid)
         DispatchQueue.main.asyncAfter(deadline: .now() + restoreAnimationDuration) { [weak window] in
+            guard let window, Windows.byWindowId[wid] === window else { return }
             restoringWids.remove(wid)
-            guard let window else { return }
-            // no `force`: this capture obeys the same conditions as the ones it replaces, so with the
-            // switcher closed and background captures off it is simply dropped — the next show captures
-            // every window anyway
+            // A closed switcher with background capture disabled drops this request; the next show refreshes it.
             refreshAsync([window], .refreshUiAfterExternalEvent)
         }
     }
@@ -100,6 +99,12 @@ enum WindowThumbnails {
     /// captures land a pixel or two off the size we asked for; only a materially smaller frame is partial
     private static let partialFrameRatio = 0.9
 
+    static func removeWindowState(_ wid: CGWindowID) {
+        focusedCaptureThrottler.removeEntry(withKey: "\(wid)")
+        restoringWids.remove(wid)
+        partialFrameRetries[wid] = nil
+    }
+
     /// The OS can hand us a frame drawn much smaller than the window it is of, because it was still animating
     /// when it drew: un-minimizing is the reported case, where the restore animation is still running when the
     /// capture it triggered is taken, and the tile turns into a mini window floating in transparent pixels.
@@ -107,11 +112,6 @@ enum WindowThumbnails {
     /// size, not the one snapshotted when the request was queued, so a request made off a mid-animation frame
     /// is caught too. Main-thread only (it reads live `Window` state).
     static func isPartialFrame(_ window: Window, _ contents: CALayerContents, fullRes: Bool) -> Bool {
-        // Only the ScreenCaptureKit path is judged: there the capture is configured with the exact pixel size
-        // we expect back, so a smaller frame is the OS's own admission that it drew a partial one. Below
-        // macOS 26 captures go through `CGSHWCaptureWindowList`, which sizes its output itself — there is no
-        // exact expectation to compare against, and a wrong one would loop every capture through the retries.
-        guard #available(macOS 26.0, *) else { return false }
         guard let size = window.size, let actual = contents.size(),
               let expected = capturePixelSize(size, captureScaleFactor(window), fullRes)
         else { return false }
@@ -138,10 +138,9 @@ enum WindowThumbnails {
             return true
         }
         partialFrameRetries[wid] = retries + 1
-        // no `force`: this re-capture obeys the same conditions the original one did, so a switcher that
-        // closed in the meantime (with background captures off) simply drops it
+        // A retry also obeys the background-capture preference if the switcher has closed.
         DispatchQueue.main.asyncAfter(deadline: .now() + partialFrameRetryDelay) { [weak window] in
-            guard let window else { return }
+            guard let window, Windows.byWindowId[wid] === window else { return }
             refreshAsync([window], .refreshUiAfterExternalEvent)
         }
         return false
@@ -151,41 +150,31 @@ enum WindowThumbnails {
     /// macOS 26+): full-resolution frames for the Preview panel are fetched separately and just-in-time
     /// by `fetchPreviewFrames` into the session's capped cache, so idle RAM stays small and a show
     /// doesn't burst N full-res captures at the system capture path (#5861).
-    static func refreshAsync(_ windows: [Window], _ source: RefreshCausedBy, windowRemoved: Bool = false, prioritizedIds: Set<CGWindowID>? = nil, force: Bool = false) {
+    static func refreshAsync(_ windows: [Window], _ source: RefreshCausedBy, windowRemoved: Bool = false, prioritizedIds: Set<CGWindowID>? = nil) {
         guard (!windows.isEmpty || windowRemoved) && ScreenRecordingPermission.status == .granted
                && !ScreenLockEvents.isScreenLocked
                && Preferences.anyShortcutShowsWindowCaptures
-               // `force` = a targeted background capture of the frontmost window (captureFocusedInBackground),
-               // which must run even when the switcher is closed and background capture is off.
-               && (Preferences.captureWindowsInBackground || SwitcherSession.isActive || force) else { return }
+               && (Preferences.captureWindowsInBackground || SwitcherSession.isActive) else { return }
         var eligibleWindows = [Window]()
         for window in windows {
             if !window.isWindowlessApp, let cgWindowId = window.cgWindowId, cgWindowId != CGWindowID(bitPattern: -1),
                // mid-restore-animation the OS draws the window scaled down; `deferCaptureUntilRestoreEnds`
                // takes the one capture that matters once it is over
-               !restoringWids.contains(cgWindowId) {
+               !restoringWids.contains(cgWindowId),
+               source != .refreshOnlyThumbnailsAfterShowUi || window.shouldShowTheUser {
                 eligibleWindows.append(window)
             }
         }
         guard (!eligibleWindows.isEmpty || windowRemoved) else { return }
-        // ScreenCaptureKit's capture path is unreliable before macOS 26: macOS 14 crashes inside Apple's own
-        // teardown (-[SCStreamManager serverDidDisconnect], a top crash in 11.3.0) and macOS 15 hits the bugs
-        // in #5190 (https://github.com/lwouis/alt-tab-macos/issues/5190). Apple rewrote ScreenCaptureKit's
-        // internals for macOS 26, so we only use it there; everything older captures via CGSHWCaptureWindowList.
-        if #available(macOS 26.0, *) {
-            WindowCaptureScreenshots.oneTimeScreenshots(eligibleWindows, source, prioritizedIds: prioritizedIds)
-        } else {
-            WindowCaptureScreenshotsPrivateApi.oneTimeScreenshots(eligibleWindows, source, prioritizedIds: prioritizedIds)
-        }
+        WindowCaptureScreenshots.oneTimeScreenshots(eligibleWindows, source, prioritizedIds: prioritizedIds)
     }
 
     /// Fetch just-in-time full-resolution Preview frames for the selected window and its ±2 cycling
     /// neighbors (so quick Tab presses land on a sharp Preview). Frames go to the session's capped cache,
     /// not `Window.thumbnail`, and die with the session. Called on show and on every selection move; the
-    /// cache and the per-wid throttler keep re-requests cheap. No-op below macOS 26, where
-    /// CGSHWCaptureWindowList always captures full-size, so `Window.thumbnail` is already sharp.
+    /// cache and the per-wid throttler keep re-requests cheap.
     static func fetchPreviewFrames() {
-        guard #available(macOS 26.0, *), let session = SwitcherSession.current,
+        guard let session = SwitcherSession.current,
               ScreenRecordingPermission.status == .granted, !ScreenLockEvents.isScreenLocked,
               Preferences.effectivePreviewSelectedWindow(session.shortcutIndex) else { return }
         let missingIds = Windows.selectedNeighborhoodIds().filter { !session.hasPreviewFrame($0) && !restoringWids.contains($0) }

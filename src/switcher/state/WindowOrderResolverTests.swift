@@ -87,8 +87,10 @@ final class WindowOrderResolverTests: XCTestCase {
 
     // MARK: - E. Alphabetical
 
+    // Avoid the Norwegian Aa digraph: these fixtures test ordering routes, not locale collation rules.
+
     func testAlphabeticalByAppName() {
-        XCTAssertTrue(WindowOrderResolver.isOrderedBefore(w(appName: "Aaa"), w(appName: "Bbb"),
+        XCTAssertTrue(WindowOrderResolver.isOrderedBefore(w(appName: "Alpha"), w(appName: "Beta"),
                                                           sortType: .alphabetical))
     }
 
@@ -118,18 +120,18 @@ final class WindowOrderResolverTests: XCTestCase {
     }
 
     func testSpaceTiebreaksByAppName() {
-        XCTAssertTrue(WindowOrderResolver.isOrderedBefore(w(spaceIndexes: [1], appName: "Aaa"),
-                                                          w(spaceIndexes: [1], appName: "Bbb"),
+        XCTAssertTrue(WindowOrderResolver.isOrderedBefore(w(spaceIndexes: [1], appName: "Alpha"),
+                                                          w(spaceIndexes: [1], appName: "Beta"),
                                                           sortType: .space))
     }
 
     /// Both windows on all spaces → no space-index ordering, fall through to alphabetical tiebreak.
     func testSpaceBothOnAllSpacesTiebreaksByAppName() {
-        XCTAssertTrue(WindowOrderResolver.isOrderedBefore(w(isOnAllSpaces: true, appName: "Aaa"),
-                                                          w(isOnAllSpaces: true, appName: "Bbb"),
+        XCTAssertTrue(WindowOrderResolver.isOrderedBefore(w(isOnAllSpaces: true, appName: "Alpha"),
+                                                          w(isOnAllSpaces: true, appName: "Beta"),
                                                           sortType: .space))
-        XCTAssertFalse(WindowOrderResolver.isOrderedBefore(w(isOnAllSpaces: true, appName: "Bbb"),
-                                                           w(isOnAllSpaces: true, appName: "Aaa"),
+        XCTAssertFalse(WindowOrderResolver.isOrderedBefore(w(isOnAllSpaces: true, appName: "Beta"),
+                                                           w(isOnAllSpaces: true, appName: "Alpha"),
                                                            sortType: .space))
     }
 

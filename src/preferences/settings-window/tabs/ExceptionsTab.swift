@@ -1,4 +1,5 @@
 import Cocoa
+import UniformTypeIdentifiers
 
 class ExceptionsTab {
     private static let sidebarWidth = CGFloat(280)
@@ -185,7 +186,7 @@ class ExceptionsTab {
     @objc private static func addFromDisk(_ sender: NSMenuItem) {
         let dialog = NSOpenPanel()
         dialog.allowsMultipleSelection = false
-        dialog.allowedFileTypes = ["app"]
+        dialog.allowedContentTypes = [.applicationBundle]
         dialog.canChooseDirectories = false
         dialog.beginSheetModal(for: SettingsWindow.shared) {
             if $0 == .OK, let url = dialog.url, let bundleId = Bundle(url: url)?.bundleIdentifier {
@@ -419,7 +420,7 @@ struct AppDisplayInfo {
     let name: String
     let icon: NSImage
 
-    static let genericIcon: NSImage = NSWorkspace.shared.icon(forFileType: "app")
+    static let genericIcon: NSImage = NSWorkspace.shared.icon(for: .applicationBundle)
 
     static func resolve(bundleId: String) -> AppDisplayInfo {
         guard !bundleId.isEmpty else {

@@ -66,7 +66,7 @@ class PreferencesEvents {
         switch key {
         case "menubarIcon", "menubarIconShown": applyMenubarPreferencesIfReady()
         case "nextWindowGesture": TrackpadEvents.toggle(Preferences.nextWindowGesture != .disabled)
-        case "startAtLogin": LoginItem.applyCurrentPreference()
+        case "startAtLogin": LoginItem.applyCurrentPreference(userInitiated: true)
         case "updatePolicy": applyUpdatePolicyPreference()
         case let k where preferencesRequiringUiReset.contains(k): App.resetPreferencesDependentComponents()
         case let k where isOverrideKey(k) || isPerShortcutGroupingKey(k): App.resetPreferencesDependentComponents()

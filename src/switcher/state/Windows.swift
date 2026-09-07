@@ -573,7 +573,8 @@ class Windows {
             if let wid = w.cgWindowId {
                 AXCallScheduler.shared.removeEntries(withPrefix: "wid-\(wid)-")
                 Applications.windowAttributesThrottler.removeEntries(withPrefix: "\(wid)-")
-                Applications.screenshotThrottler.removeEntry(withKey: "capture-wid-\(wid)")
+                WindowCaptureScreenshots.removeWindowRequests(wid)
+                WindowThumbnails.removeWindowState(wid)
             }
             // when a tabbed window is removed, its group shrinks (or dissolves) in the registry
             if let wid = w.cgWindowId {

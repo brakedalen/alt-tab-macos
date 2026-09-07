@@ -96,11 +96,9 @@ func noAnimation<T: CALayer>(_ make: () -> T) -> T {
     return make()
 }
 
-// 10.13-safe stand-ins (the test target's deployment floor matches the app's 10.13). The real
-// extensions in HelperExtensions.swift `#available`-gate the 10.14+ system colors; the tests
-// never inspect these values, so plain 10.13-era colors suffice.
+// Stand-ins for the app's custom table colors; these tests do not inspect their visual values.
 extension NSColor {
-    class var systemAccentColor: NSColor { .alternateSelectedControlColor }
+    class var systemAccentColor: NSColor { .controlAccentColor }
     class var tableBorderColor: NSColor { .gridColor }
     class var tableBackgroundColor: NSColor { .windowBackgroundColor }
     class var tableSeparatorColor: NSColor { .gridColor }
@@ -138,7 +136,7 @@ class App {
         var tilesPanel = TilesPanelMock()
     }
     static let app = AppMock()
-    static let bundleIdentifier = "com.lwouis.alt-tab-macos"
+    static let bundleIdentifier = "no.brakedalen.AltTab-dev.unit-tests"
 }
 
 class TilesPanel {
@@ -173,7 +171,9 @@ class ControlsTab {
         "holdShortcut2": ATShortcut(Shortcut(keyEquivalent: "⌥")!, "holdShortcut2", .global, .up, 1),
         "holdShortcut3": ATShortcut(Shortcut(keyEquivalent: "⌥")!, "holdShortcut3", .global, .up, 2),
         "nextWindowShortcut": ATShortcut(Shortcut(keyEquivalent: "⇥")!, "nextWindowShortcut", .global, .down),
-        "nextWindowShortcut2": ATShortcut(Shortcut(keyEquivalent: "`")!, "nextWindowShortcut2", .global, .down),
+        // The keyboard-event fixtures use ANSI grave (0x32). A literal backtick is a dead key
+        // on some host layouts and cannot reliably be reverse-translated into a shortcut.
+        "nextWindowShortcut2": ATShortcut(Shortcut(code: .ansiGrave, modifierFlags: [], characters: "`", charactersIgnoringModifiers: "`"), "nextWindowShortcut2", .global, .down),
         "→": ATShortcut(Shortcut(keyEquivalent: "→")!, "→", .local, .down),
         "←": ATShortcut(Shortcut(keyEquivalent: "←")!, "←", .local, .down),
         "↑": ATShortcut(Shortcut(keyEquivalent: "↑")!, "↑", .local, .down),

@@ -1,4 +1,5 @@
 import Cocoa
+import UniformTypeIdentifiers
 import Sparkle
 
 class GeneralTab {
@@ -46,12 +47,17 @@ class GeneralTab {
         table.addNewTable()
         table.addRow(language)
         table.addNewTable()
-        table.addRow(leftViews: [TableGroupView.makeText(NSLocalizedString("Updates policy", comment: ""))],
-            rightViews: [updatesPolicyDropdown!],
-            secondaryViews: [checkForUpdates],
-            secondaryViewsAlignment: .right,
-            secondaryViewsTopGap: 8)
-        table.addRow(crashPolicy)
+        if App.isDevelopmentBuild {
+            table.addRow(leftViews: [TableGroupView.makeText("AltTab dev")],
+                rightViews: [TableGroupView.makeText("Updates and crash uploads are disabled in this build.")])
+        } else {
+            table.addRow(leftViews: [TableGroupView.makeText(NSLocalizedString("Updates policy", comment: ""))],
+                rightViews: [updatesPolicyDropdown!],
+                secondaryViews: [checkForUpdates],
+                secondaryViewsAlignment: .right,
+                secondaryViewsTopGap: 8)
+            table.addRow(crashPolicy)
+        }
         let exportButton = NSButton(title: NSLocalizedString("Export settings…", comment: ""), target: nil, action: nil)
         exportButton.onAction = { _ in exportSettings() }
         let importButton = NSButton(title: NSLocalizedString("Import settings…", comment: ""), target: nil, action: nil)
@@ -95,6 +101,7 @@ class GeneralTab {
     }
 
     @objc static func checkForUpdatesNow(_ sender: Any?) {
+        guard !App.isDevelopmentBuild else { return }
         // The updater is lazy-started 30s after launch; if the user presses this button before
         // then, defensively start it first (idempotent — second call is a no-op).
         App.updaterController?.startUpdater()
@@ -104,14 +111,14 @@ class GeneralTab {
     private static func exportSettings() {
         let panel = NSSavePanel()
         panel.nameFieldStringValue = "\(App.bundleIdentifier).plist"
-        panel.allowedFileTypes = ["plist"]
+        panel.allowedContentTypes = [.propertyList]
         guard panel.runModal() == .OK, let url = panel.url else { return }
         NSDictionary(dictionary: Preferences.all).write(to: url, atomically: true)
     }
 
     private static func importSettings() {
         let panel = NSOpenPanel()
-        panel.allowedFileTypes = ["plist"]
+        panel.allowedContentTypes = [.propertyList]
         panel.allowsMultipleSelection = false
         guard panel.runModal() == .OK, let url = panel.url else { return }
         guard let dict = NSDictionary(contentsOf: url) as? [String: Any] else {

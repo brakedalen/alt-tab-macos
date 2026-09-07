@@ -356,7 +356,6 @@ class SettingsWindow: NSWindow {
         titlebarAppearsTransparent = true
         isMovableByWindowBackground = true
         let toolbar = NSToolbar(identifier: "SettingsToolbar")
-        toolbar.showsBaselineSeparator = false
         self.toolbar = toolbar
         if #available(macOS 11.0, *) {
             toolbarStyle = .unified
@@ -461,11 +460,7 @@ class SettingsWindow: NSWindow {
         searchField.sendsSearchStringImmediately = true
         searchField.sendsWholeSearchString = true
         searchField.bezelStyle = .roundedBezel
-        if #available(macOS 26.0, *) {
-            searchField.controlSize = .extraLarge
-        } else if #available(macOS 13.0, *) {
-            searchField.controlSize = .large
-        }
+        searchField.controlSize = .extraLarge
         searchField.translatesAutoresizingMaskIntoConstraints = false
         parent.addSubview(searchField)
         NSLayoutConstraint.activate([
@@ -483,7 +478,6 @@ class SettingsWindow: NSWindow {
         sidebarTableView.headerView = nil
         sidebarTableView.intercellSpacing = NSSize(width: 0, height: 2)
         sidebarTableView.rowHeight = 30
-        sidebarTableView.selectionHighlightStyle = .sourceList
         sidebarTableView.backgroundColor = .clear
         sidebarTableView.focusRingType = .none
         sidebarTableView.usesAlternatingRowBackgroundColors = false

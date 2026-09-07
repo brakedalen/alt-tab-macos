@@ -6,7 +6,7 @@ class UserDefaultsEvents: NSObject {
     private static var isObserving = false
 
     static func observe() {
-        guard !isObserving else { return }
+        guard !isObserving, !App.isDevelopmentBuild else { return }
         isObserving = true
         UserDefaults.standard.addObserver(policyObserver, forKeyPath: "SUAutomaticallyUpdate", options: [.initial, .new], context: nil)
         UserDefaults.standard.addObserver(policyObserver, forKeyPath: "SUEnableAutomaticChecks", options: [.initial, .new], context: nil)
